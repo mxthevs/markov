@@ -47,7 +47,7 @@ let get_random_element list =
 let get_random_pair table =
   get_random_element (keys table)
 
-let markov ?(length=15) table =
+let markov ~length table =
   let first =
     match get_random_pair table with
     | Some pair -> pair
@@ -70,10 +70,10 @@ let markov ?(length=15) table =
 
 let () =
   match Array.to_list Sys.argv with
-  | _ :: path :: _ ->
+  | _ :: path :: length :: _ ->
     let words = prepare_corpus path in
     build_table words markov_table;
 
-    let chain = markov markov_table in
+    let chain = markov ~length:(int_of_string length) markov_table in
     print_endline chain
-  | _ -> print_endline "USAGE: ./markov corpus.txt";
+  | _ -> print_endline "USAGE: ./markov corpus.txt <n>";

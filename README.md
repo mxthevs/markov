@@ -3,5 +3,5 @@
 ## Running the project
 
 ```console
-  ./build.sh && ./markov /path/to/corpus.txt
+  ./build.sh && ./markov /path/to/corpus.txt 50
 ```
