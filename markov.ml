@@ -53,18 +53,18 @@ let markov ~length table =
     | Some pair -> pair
     | None -> ("", "")
   in
-  let rec aux key first length chain =
+  let rec aux key table length chain =
     match length with
     | 0 -> chain
     | _ ->
-      let (first, second) = key in
+      let (_, w2) = key in
       let next =
         match Hashtbl.find_opt table key with
         | Some words -> get_random_element words
         | None -> None
       in
       match next with
-      | Some word -> aux (second, word) table (length - 1) ((chain ^ word) ^ " ")
+      | Some word -> aux (w2, word) table (length - 1) ((chain ^ word) ^ " ")
       | None -> chain
    in aux first table length  ""
 
