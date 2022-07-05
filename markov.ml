@@ -1,19 +1,47 @@
 let () = Random.self_init ()
 
-let markov_table : (string * string, string list) Hashtbl.t = Hashtbl.create 4096
-
-let update table key ~f =
-  match f (Hashtbl.find_opt table key) with
-  | None -> Hashtbl.remove table key
-  | Some data -> Hashtbl.add table key data
-
-let keys table = Hashtbl.fold (fun k _ acc -> k :: acc) table []
+exception Unreachable
 
 let read_file filename =
   let ch = open_in filename in
   let content = really_input_string ch (in_channel_length ch) in
   close_in ch;
   content
+
+module MarkovTable : sig
+  type key = (string * string)
+  type value = string list
+
+  type t
+
+  val make : ?size:int -> unit -> t
+
+  val ( .%{} ) : t -> key -> value option
+  val ( .%{} <- ) : t -> key -> value -> unit
+
+  val keys : t -> key list
+
+  val update : t -> key -> f:(value option -> value option) -> unit
+end = struct
+  include Hashtbl
+
+  type key = (string * string)
+  type value = string list
+
+  type t = (key, value) Hashtbl.t
+
+  let make ?(size=4096) () = create size
+
+  let ( .%{} ) tabl index = find_opt tabl index
+  let ( .%{} <- ) tabl index value = add tabl index value
+
+  let keys tabl = fold (fun k _ acc -> k :: acc) tabl []
+
+  let update tabl key ~f =
+    match f (tabl.%{key}) with
+    | None -> remove tabl key
+    | Some value -> tabl.%{key} <- value
+end
 
 let prepare_corpus file_path =
   file_path
@@ -29,51 +57,52 @@ let prepare_corpus file_path =
   |> List.flatten
 
 (* TODO: save the hashtable? *)
-let rec build_table words table =
+let rec build_table words tabl =
   match words with
   | []
   | _ :: []
   | _ :: _ :: [] -> ()
   | w1 :: w2 :: w3 :: rest ->
-    update table (w1, w2) (function
-                           | Some x -> Some (x @ [w3])
-                           | None -> Some [w3]);
-    build_table (w2 :: w3 :: rest) table
+    MarkovTable.update tabl ((w1, w2)) (function
+                                        | Some value -> Some (value @ [w3])
+                                        | None -> Some [w3]);
+    build_table (w2 :: w3 :: rest) tabl
 
 let get_random_element list =
   let i = Random.int (List.length list) in
   List.nth_opt list i
 
-let get_random_pair table =
-  get_random_element (keys table)
+let get_random_pair tabl =
+  get_random_element (MarkovTable.keys tabl)
 
-let markov ~length table =
+let markov ~length tabl =
   let first =
-    match get_random_pair table with
+    match get_random_pair tabl with
     | Some pair -> pair
-    | None -> ("", "")
+    | None -> raise Unreachable
   in
-  let rec aux key table length chain =
+  let rec aux key tabl length chain =
     match length with
     | 0 -> chain
     | _ ->
       let (_, w2) = key in
       let next =
-        match Hashtbl.find_opt table key with
+        match MarkovTable.(tabl.%{key}) with
         | Some words -> get_random_element words
         | None -> None
       in
       match next with
-      | Some word -> aux (w2, word) table (length - 1) ((chain ^ word) ^ " ")
+      | Some word -> aux (w2, word) tabl (length - 1) ((chain ^ word) ^ " ")
       | None -> chain
-   in aux first table length  ""
+   in aux first tabl length  ""
 
 let () =
   match Array.to_list Sys.argv with
   | _ :: path :: length :: _ ->
+    let table = MarkovTable.make () in
     let words = prepare_corpus path in
-    build_table words markov_table;
+    build_table words table ;
 
-    let chain = markov ~length:(int_of_string length) markov_table in
+    let chain = markov ~length:(int_of_string length) table in
     print_endline chain
-  | _ -> print_endline "USAGE: ./markov corpus.txt <n>";
+  | _ -> print_endline "USAGE: ./markov corpus.txt <nº of words>";
