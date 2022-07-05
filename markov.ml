@@ -1,7 +1,5 @@
 let () = Random.self_init ()
 
-exception Unreachable
-
 let read_file filename =
   let ch = open_in filename in
   let content = really_input_string ch (in_channel_length ch) in
@@ -76,11 +74,7 @@ let get_random_pair tabl =
   get_random_element (MarkovTable.keys tabl)
 
 let markov ~length tabl =
-  let first =
-    match get_random_pair tabl with
-    | Some pair -> pair
-    | None -> raise Unreachable
-  in
+  let first = Option.get (get_random_pair tabl) in
   let rec aux key tabl length chain =
     match length with
     | 0 -> chain
