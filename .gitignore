@@ -1,4 +1,8 @@
 markov
 *.o
+*.out
 *.cmi
 *.cmx
+*.cmo
+
+*.txt
