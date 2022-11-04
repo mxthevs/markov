@@ -1,10 +1,16 @@
 let () = Random.self_init ()
 
+exception Unreachable
+
 let read_file filename =
   let ch = open_in filename in
   let content = really_input_string ch (in_channel_length ch) in
   close_in ch;
   content
+
+let get_random_element list =
+  let i = Random.int (List.length list) in
+  List.nth list i
 
 module MarkovTable : sig
   type key = (string * string)
@@ -20,6 +26,10 @@ module MarkovTable : sig
   val keys : t -> key list
 
   val update : t -> key -> f:(value option -> value option) -> unit
+
+  val init : t -> string list -> unit
+
+  val random_key : t -> key
 end = struct
   include Hashtbl
 
@@ -39,6 +49,20 @@ end = struct
     match f (tabl.%{key}) with
     | None -> remove tabl key
     | Some value -> tabl.%{key} <- value
+
+  (* TODO: save the hashtable? *)
+  let rec init tabl words =
+    match words with
+    | []
+    | _ :: []
+    | _ :: _ :: [] -> ()
+    | w1 :: w2 :: w3 :: rest ->
+      update tabl ((w1, w2)) (function
+                              | Some value -> Some (value @ [w3])
+                              | None -> Some [w3]);
+      init tabl (w2 :: w3 :: rest)
+
+  let random_key tabl = get_random_element (keys tabl)
 end
 
 let prepare_corpus file_path =
@@ -54,27 +78,8 @@ let prepare_corpus file_path =
                |> List.filter (fun line -> String.length line > 0))
   |> List.flatten
 
-(* TODO: save the hashtable? *)
-let rec build_table words tabl =
-  match words with
-  | []
-  | _ :: []
-  | _ :: _ :: [] -> ()
-  | w1 :: w2 :: w3 :: rest ->
-    MarkovTable.update tabl ((w1, w2)) (function
-                                        | Some value -> Some (value @ [w3])
-                                        | None -> Some [w3]);
-    build_table (w2 :: w3 :: rest) tabl
-
-let get_random_element list =
-  let i = Random.int (List.length list) in
-  List.nth_opt list i
-
-let get_random_pair tabl =
-  get_random_element (MarkovTable.keys tabl)
-
 let markov ~length tabl =
-  let first = Option.get (get_random_pair tabl) in
+  let first = MarkovTable.random_key tabl in
   let rec aux key tabl length chain =
     match length with
     | 0 -> chain
@@ -83,11 +88,10 @@ let markov ~length tabl =
       let next =
         match MarkovTable.(tabl.%{key}) with
         | Some words -> get_random_element words
-        | None -> None
+        | None -> raise Unreachable
       in
-      match next with
-      | Some word -> aux (w2, word) tabl (length - 1) ((chain ^ word) ^ " ")
-      | None -> chain
+
+      aux (w2, next) tabl (length - 1) ((chain ^ next) ^ " ")
    in aux first tabl length  ""
 
 let () =
@@ -95,7 +99,8 @@ let () =
   | _ :: path :: length :: _ ->
     let table = MarkovTable.make () in
     let words = prepare_corpus path in
-    build_table words table ;
+
+    MarkovTable.init table words ;
 
     let chain = markov ~length:(int_of_string length) table in
     print_endline chain
