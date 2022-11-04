@@ -30,6 +30,10 @@ module MarkovTable : sig
   val init : t -> string list -> unit
 
   val random_key : t -> key
+
+  val save_to_file : t -> string -> unit
+
+  val load_from_file : string -> t
 end = struct
   include Hashtbl
 
@@ -50,7 +54,6 @@ end = struct
     | None -> remove tabl key
     | Some value -> tabl.%{key} <- value
 
-  (* TODO: save the hashtable? *)
   let rec init tabl words =
     match words with
     | []
@@ -63,6 +66,17 @@ end = struct
       init tabl (w2 :: w3 :: rest)
 
   let random_key tabl = get_random_element (keys tabl)
+
+  let save_to_file tabl path =
+    let ch = open_out_bin path in
+    Marshal.to_channel ch tabl [];
+    close_out ch
+
+  let load_from_file path =
+    let ch = open_in_bin path in
+    let tabl = Marshal.from_channel ch in
+    close_in ch;
+    tabl
 end
 
 let prepare_corpus file_path =
