@@ -79,6 +79,42 @@ end = struct
     tabl
 end
 
+
+module Config = struct
+  type t = {
+    corpus_path : string;
+    output_path : string option;
+    model_path : string option;
+    length : int;
+  }
+
+  let make () =
+    let usage = "./markov <path/to/corpus.txt> -l <lenght> -m <path/to/model.bin> -o <path/to/model.bin>" in
+    let corpus_path = ref "" in
+    let model_path = ref "" in
+    let output_path = ref "" in
+    let length = ref 50 in
+
+    let anon_fun filename =
+      corpus_path := filename
+    in
+
+    let speclist =
+      [("-l", Arg.Set_int length, "Length of the generated text");
+       ("-o", Arg.Set_string output_path, "Output path for the model");
+       ("-m", Arg.Set_string model_path, "Load a model from a file")]
+    in
+
+    Arg.parse speclist anon_fun usage;
+
+    {
+      corpus_path = !corpus_path;
+      model_path =  if !model_path = "" then None else Some !model_path;
+      output_path = if !output_path = "" then None else Some !output_path;
+      length = !length;
+    }
+end
+
 let prepare_corpus file_path =
   file_path
   |> read_file
@@ -109,13 +145,21 @@ let markov ~length tabl =
    in aux first tabl length  ""
 
 let () =
-  match Array.to_list Sys.argv with
-  | _ :: path :: length :: _ ->
-    let table = MarkovTable.make () in
-    let words = prepare_corpus path in
+  let config = Config.make () in
 
-    MarkovTable.init table words ;
+  let tabl =
+    match config.model_path with
+    | Some path -> MarkovTable.load_from_file path
+    | None ->
+      let tabl = MarkovTable.make () in
+      let corpus = prepare_corpus config.corpus_path in
+      MarkovTable.init tabl corpus;
+      tabl
+  in
 
-    let chain = markov ~length:(int_of_string length) table in
-    print_endline chain
-  | _ -> print_endline "USAGE: ./markov corpus.txt <nº of words>";
+  match config.output_path with
+  | Some path -> MarkovTable.save_to_file tabl path
+  | None -> ();
+
+  let chain = markov ~length:config.length tabl in
+  print_endline chain
